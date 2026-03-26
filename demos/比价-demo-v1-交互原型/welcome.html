@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>欢迎使用本草比价助手</title>
+    <style>
+        :root {
+            --color-primary: #E53935;
+            --color-primary-hover: #D32F2F;
+            --color-brand-green: #4CAF50;
+            --color-bg: #FFFFFF;
+            --color-text-main: #333333;
+            --color-text-sub: #888888;
+            --color-text-muted: #BBBBBB;
+            --font-family: -apple-system, "Microsoft YaHei", sans-serif;
+            --radius-card: 12px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: var(--font-family);
+            background-color: var(--color-bg);
+            color: var(--color-text-main);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+        }
+
+        a {
+            text-decoration: none;
+            color: inherit;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+
+        /* 1. 顶部导航栏 */
+        .header {
+            height: 60px;
+            background-color: #FFFFFF;
+            border-bottom: 1px solid #EEEEEE;
+            display: flex;
+            align-items: center;
+            padding: 0 24px;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+        }
+
+        .header-left {
+            flex: 1;
+            font-size: 14px;
+            color: #999999;
+        }
+
+        .header-left a:hover {
+            color: var(--color-primary);
+        }
+
+        .header-center {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 18px;
+            font-weight: bold;
+            color: #333333;
+        }
+
+        .header-center .icon {
+            color: var(--color-brand-green);
+        }
+
+        .header-right {
+            flex: 1;
+        }
+
+        /* 页面加载动画 */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* 2. 主内容区 */
+        .main-wrapper {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 100px 20px 60px; /* 留出 header 和 footer 的空间 */
+        }
+
+        .main-content {
+            width: 100%;
+            max-width: 600px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            animation: fadeInUp 0.8s ease-out forwards;
+        }
+
+        /* a. 品牌标识 */
+        .brand-section {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .brand-icon {
+            font-size: 64px;
+            line-height: 1;
+            margin-bottom: 16px;
+            display: inline-block;
+        }
+
+        .brand-title {
+            font-size: 28px;
+            font-weight: bold;
+            color: var(--color-text-main);
+            margin-bottom: 12px;
+        }
+
+        .brand-subtitle {
+            font-size: 16px;
+            color: var(--color-text-sub);
+        }
+
+        /* b. 功能介绍卡片 */
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            width: 100%;
+            margin-bottom: 32px;
+        }
+
+        .feature-card {
+            background-color: #FFFFFF;
+            border-radius: var(--radius-card);
+            padding: 20px 16px;
+            text-align: center;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+            border: 1px solid #F0F0F0;
+            transition: all 0.3s ease;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-6px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+        }
+
+        .feature-icon {
+            font-size: 24px;
+            margin-bottom: 12px;
+        }
+
+        .feature-title {
+            font-size: 15px;
+            font-weight: bold;
+            color: var(--color-text-main);
+            margin-bottom: 8px;
+        }
+
+        .feature-desc {
+            font-size: 12px;
+            color: #666666;
+            line-height: 1.5;
+        }
+
+        /* c. 授权提示区域 */
+        .auth-notice {
+            background-color: #FFF8E1;
+            border-radius: var(--radius-card);
+            padding: 20px;
+            width: 100%;
+            display: flex;
+            gap: 16px;
+            margin-bottom: 40px;
+            box-shadow: 0 2px 8px rgba(255, 193, 7, 0.1);
+        }
+
+        .notice-icon {
+            font-size: 20px;
+            line-height: 1.2;
+        }
+
+        .notice-content {
+            flex: 1;
+        }
+
+        .notice-title {
+            font-size: 16px;
+            font-weight: bold;
+            color: #333333;
+            margin-bottom: 8px;
+        }
+
+        .notice-desc {
+            font-size: 14px;
+            color: #666666;
+            line-height: 1.8;
+            white-space: pre-line; /* 保留换行符 */
+        }
+
+        /* d. 操作按钮 */
+        .actions-section {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+            width: 100%;
+        }
+
+        .btn-primary {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: var(--color-primary);
+            color: #FFFFFF;
+            border-radius: 24px;
+            width: 240px;
+            height: 48px;
+            font-size: 16px;
+            font-weight: 500;
+            transition: all 0.2s;
+            box-shadow: 0 4px 12px rgba(229, 57, 53, 0.2);
+        }
+
+        .btn-primary:hover {
+            background-color: var(--color-primary-hover);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(229, 57, 53, 0.3);
+        }
+
+        .btn-secondary {
+            font-size: 14px;
+            color: #999999;
+            padding: 8px;
+        }
+
+        .btn-secondary:hover {
+            color: #666666;
+        }
+
+        /* 3. 底部说明 */
+        .footer {
+            text-align: center;
+            padding: 20px;
+            font-size: 14px;
+            color: var(--color-text-muted);
+            margin-top: auto;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 1. 顶部导航栏 -->
+    <header class="header">
+        <div class="header-left">
+            <a href="index.html">← 返回1药城</a>
+        </div>
+        <div class="header-center">
+            <span class="icon">🌿</span>
+            <span>本草比价</span>
+        </div>
+        <div class="header-right"></div>
+    </header>
+
+    <!-- 2. 主内容区 -->
+    <main class="main-wrapper">
+        <div class="main-content">
+            
+            <!-- a. 品牌标识 -->
+            <div class="brand-section">
+                <div class="brand-icon">🌿</div>
+                <h1 class="brand-title">本草比价助手</h1>
+                <p class="brand-subtitle">一句话，比遍全网药品价格</p>
+            </div>
+
+            <!-- b. 功能介绍卡片 -->
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">💬</div>
+                    <div class="feature-title">对话式查药</div>
+                    <div class="feature-desc">告诉我药品名，自动帮你查价</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📊</div>
+                    <div class="feature-title">多平台比价</div>
+                    <div class="feature-desc">同时查询1药城、药师帮等多个平台</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🔒</div>
+                    <div class="feature-title">安全可靠</div>
+                    <div class="feature-desc">只查价不下单，账号信息加密保护</div>
+                </div>
+            </div>
+
+            <!-- c. 授权提示区域 -->
+            <div class="auth-notice">
+                <div class="notice-icon">ℹ️</div>
+                <div class="notice-content">
+                    <div class="notice-title">开始前，需要做一件事</div>
+                    <div class="notice-desc">为了帮您查询外部平台的价格，需要授权您在药师帮等平台的账号。
+1药城的价格会自动获取，无需额外操作。
+您的账号信息将加密存储，仅用于查询价格，绝不会代您下单。</div>
+                </div>
+            </div>
+
+            <!-- d. 操作按钮 -->
+            <div class="actions-section">
+                <a href="auth.html" class="btn-primary">立即授权，开始使用</a>
+                <a href="chat.html" class="btn-secondary">暂不授权，先体验一下 →</a>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- 3. 底部说明 -->
+    <footer class="footer">
+        本草比价 · 由1药城 AI 团队提供技术支持
+    </footer>
+
+</body>
+</html>

@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>壹药城·智能比价助手</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#f0f0f0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;display:flex;justify-content:center;height:100vh}
+.app{width:100%;max-width:420px;height:100vh;display:flex;flex-direction:column;background:#f5f5f5}
+.header{background:#d42027;color:#fff;padding:14px 16px;text-align:center;font-size:16px;font-weight:bold;flex-shrink:0}
+.chat{flex:1;overflow-y:auto;padding:12px 12px 130px 12px}
+.msg{margin-bottom:10px;display:flex;animation:fadeIn .3s ease}
+.msg.user{justify-content:flex-end}
+.msg.bot{justify-content:flex-start}
+.bubble{max-width:85%;padding:10px 14px;border-radius:12px;font-size:14px;line-height:1.7;word-break:break-word;white-space:pre-line}
+.msg.bot .bubble{background:#fff;color:#333;border-bottom-left-radius:2px}
+.msg.user .bubble{background:#d42027;color:#fff;border-bottom-right-radius:2px}
+.bubble.small{font-size:12px;color:#999;padding:6px 14px}
+.hl{color:#d42027;font-weight:bold}
+.bottom-area{position:fixed;bottom:0;width:100%;max-width:420px;background:#fff;border-top:1px solid #eee;z-index:10}
+.guide-wrap{padding:8px 12px 4px;display:flex;gap:8px;flex-wrap:wrap;justify-content:center;min-height:10px}
+.guide-btn{background:#fff;color:#d42027;border:1.5px solid #d42027;padding:6px 14px;border-radius:20px;font-size:13px;cursor:pointer;white-space:nowrap;font-weight:500}
+.guide-btn:active{background:#d42027;color:#fff}
+.input-bar{padding:6px 12px 10px;display:flex;gap:8px}
+.input-bar input{flex:1;border:1px solid #ddd;border-radius:20px;padding:8px 16px;font-size:14px;outline:none}
+.input-bar button{width:40px;height:40px;border-radius:50%;background:#d42027;color:#fff;border:none;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.typing{display:inline-flex;gap:4px;align-items:center}
+.typing span{width:6px;height:6px;background:#ccc;border-radius:50%;animation:bounce .6s infinite}
+.typing span:nth-child(2){animation-delay:.15s}
+.typing span:nth-child(3){animation-delay:.3s}
+@keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">💊 壹药城·智能比价助手</div>
+  <div class="chat" id="chat"></div>
+  <div class="bottom-area">
+    <div class="guide-wrap" id="guideWrap"></div>
+    <div class="input-bar">
+      <input id="inp" placeholder="输入药品名称或指令..." onkeydown="if(event.key==='Enter'&&!event.isComposing)sendInput()">
+      <button onclick="sendInput()">➤</button>
+    </div>
+  </div>
+</div>
+<script>
+const chat=document.getElementById('chat');
+const inp=document.getElementById('inp');
+const guideWrap=document.getElementById('guideWrap');
+let step=null, usedScenes=new Set();
+
+const allQuick=["帮我查阿莫西林","查一下布洛芬的价格","感冒灵多少钱","板蓝根有货吗","头孢 0.5g"];
+
+function updateGuide(){
+  guideWrap.innerHTML='';
+  const remaining=allQuick.filter(o=>!usedScenes.has(o));
+  if(!remaining.length){
+    const b=document.createElement('button');b.className='guide-btn';b.textContent='🔄 重新开始';
+    b.onclick=()=>location.reload();guideWrap.appendChild(b);return;
+  }
+  remaining.forEach(opt=>{
+    const b=document.createElement('button');b.className='guide-btn';b.textContent=opt;
+    b.onclick=()=>{usedScenes.add(opt);inp.value=opt;sendInput();};
+    guideWrap.appendChild(b);
+  });
+}
+
+function showGuideButtons(options){
+  guideWrap.innerHTML='';
+  options.forEach(opt=>{
+    const b=document.createElement('button');b.className='guide-btn';b.textContent=opt;
+    b.onclick=()=>{guideWrap.innerHTML='';inp.value=opt;sendInput();};
+    guideWrap.appendChild(b);
+  });
+}
+
+function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
+function scroll(){chat.scrollTop=chat.scrollHeight;}
+function hl(t){return t.replace(/(1药城|药师帮|九州通|小药药)/g,'<span class="hl">$1</span>');}
+
+function addBot(text,isSmall){
+  const d=document.createElement('div');d.className='msg bot';
+  const b=document.createElement('div');b.className='bubble'+(isSmall?' small':'');
+  b.innerHTML=hl(text.replace(/\n/g,'<br>'));
+  d.appendChild(b);chat.appendChild(d);scroll();
+}
+function addUser(text){
+  const d=document.createElement('div');d.className='msg user';
+  const b=document.createElement('div');b.className='bubble';b.textContent=text;
+  d.appendChild(b);chat.appendChild(d);scroll();
+}
+function showTyping(){
+  const d=document.createElement('div');d.className='msg bot';d.id='typing';
+  d.innerHTML='<div class="bubble"><span class="typing"><span></span><span></span><span></span></span></div>';
+  chat.appendChild(d);scroll();
+}
+function hideTyping(){const t=document.getElementById('typing');if(t)t.remove();}
+
+// ====== 场景 ======
+
+async function sceneIntro(){
+  showTyping();await sleep(500);hideTyping();
+  addBot("您好！我是您的智能比价助手 🤖");
+  showTyping();await sleep(500);hideTyping();
+  addBot("我可以帮您查询药品在各采购平台的价格，一次比多家，省时省力 📊");
+  showTyping();await sleep(500);hideTyping();
+  addBot("🔒 请放心，我只会帮您查看价格，不会代您下单，账号信息加密保存。");
+  showTyping();await sleep(600);hideTyping();
+  addBot("首次使用需要先授权平台，目前支持：\n\n1️⃣ 1药城 — 自动关联 ✅\n2️⃣ 药师帮 — 手机号 + 密码\n3️⃣ 九州通 — 手机号 + 密码\n4️⃣ 小药药 — 即将支持 🔜\n5️⃣ 199 — 即将支持 🔜\n\n请选择要授权的平台（输入序号）💊");
+  step='auth_pick';
+  showGuideButtons(["2"]);
+}
+
+async function authFlow(text){
+  if(step==='auth_pick'){
+    addUser(text);showTyping();await sleep(400);hideTyping();
+    addBot("好的，来配置药师帮 👇\n请输入您的药师帮手机号：");
+    step='auth_phone';
+    showGuideButtons(["13476350691"]);
+  }else if(step==='auth_phone'){
+    addUser(text);showTyping();await sleep(300);hideTyping();
+    addBot("收到，请输入密码：");
+    step='auth_pwd';
+    showGuideButtons(["13476350691"]);
+  }else if(step==='auth_pwd'){
+    addUser(text);showTyping();await sleep(500);hideTyping();
+    addBot("✅ 药师帮授权成功！还需要授权其他平台吗？或者直接告诉我您想查什么药？");
+    step='ready';
+    updateGuide();
+  }
+}
+
+// 阿莫西林 — 1药城最低
+async function sceneAmoxicillin(){
+  usedScenes.add('阿莫西林');
+  addUser("帮我查阿莫西林");
+  showTyping();await sleep(800);hideTyping();
+  addBot("🔍 正在为您搜索「阿莫西林」...\n\n✅ 1药城 — 已获取\n✅ 药师帮 — 已获取");
+  await sleep(400);
+  addBot("📊 比价结果\n\n1. 阿莫西林胶囊 0.25g×50粒 | 哈药集团\n　 1药城 ¥3.50 ← 最低 | 药师帮 ¥3.73\n\n2. 阿莫西林胶囊 0.25g×24粒 | 联邦制药\n　 1药城 ¥2.60 ← 最低 | 药师帮 ¥2.95\n\n3. 阿莫西林颗粒 0.125g×12袋 | 白云山\n　 1药城 ¥3.90 ← 最低 | 药师帮 ¥4.05\n\n请回复序号选择您要采购的药品 👆");
+  step='amx_pick';
+  showGuideButtons(["1"]);
+}
+async function amxDetail(){
+  addUser("1");showTyping();await sleep(600);hideTyping();
+  addBot("📋 阿莫西林胶囊 0.25g×50粒（哈药集团/益萨林）\n\n💰 1药城　¥3.50　无限制　效期2028-10　充足\n　 药师帮　¥3.73　80盒起　效期2028-08　限购100盒");
+  await sleep(300);
+  addBot("💡 1药城价格最低 ¥3.50/盒，比药师帮便宜 ¥0.23（约6%），且无起购量限制、有效期更长，建议直接在1药城采购。\n\n🛒 1药城购物车：https://mall.yaoex.com/v2/cart/#/home?useCache=null");
+  addBot("🕐 价格采集时间：2026-03-18 14:30",true);
+  await sleep(300);
+  addBot("还需要查其他药品吗？😊");
+  step='ready';
+  updateGuide();
+}
+
+// 布洛芬 — 药师帮最低
+async function sceneIbuprofen(){
+  usedScenes.add('布洛芬');
+  addUser("查一下布洛芬的价格");
+  showTyping();await sleep(800);hideTyping();
+  addBot("🔍 正在为您搜索「布洛芬」...\n\n✅ 1药城 — 已获取\n✅ 药师帮 — 已获取");
+  await sleep(400);
+  addBot("📊 比价结果\n\n1. 布洛芬缓释胶囊 0.3g×20粒 | 中美史克\n　 1药城 ¥12.50 | 药师帮 ¥11.20 ← 最低\n\n2. 布洛芬片 0.2g×24片 | 恒瑞医药\n　 1药城 ¥6.10 | 药师帮 ¥5.80 ← 最低\n\n请回复序号选择您要采购的药品 👆");
+  step='ibu_pick';
+  showGuideButtons(["1"]);
+}
+async function ibuDetail(){
+  addUser("1");showTyping();await sleep(600);hideTyping();
+  addBot("📋 布洛芬缓释胶囊 0.3g×20粒（中美史克/芬必得）\n\n💰 药师帮　¥11.20　50盒起　效期2028-03　有货\n　 1药城　¥12.50　无限制　效期2028-06　充足");
+  await sleep(300);
+  addBot("💡 药师帮价格最低 ¥11.20/盒，比1药城便宜 ¥1.30（约10%），但需50盒起购。如采购量达标建议选择药师帮；如需灵活补货，1药城无起购限制。\n\n🔗 去药师帮看看：https://dian2.ysbang.cn/#/cart\n🛒 1药城购物车：https://mall.yaoex.com/v2/cart/#/home?useCache=null");
+  addBot("🕐 价格采集时间：2026-03-18 14:32",true);
+  await sleep(300);
+  addBot("还需要查其他药品吗？😊");
+  step='ready';
+  updateGuide();
+}
+
+// 感冒灵 — 授权过期
+async function sceneGanmaoing(){
+  usedScenes.add('感冒灵');
+  addUser("感冒灵多少钱");
+  showTyping();await sleep(800);hideTyping();
+  addBot("🔍 正在为您搜索「感冒灵」...\n\n✅ 1药城 — 已获取\n❌ 药师帮 — 授权已过期");
+  await sleep(400);
+  addBot("📊 比价结果（仅展示可用平台）\n\n1. 感冒灵颗粒 10g×9袋 | 华润三九\n　 1药城 ¥12.50\n\n2. 感冒灵胶囊 0.5g×20粒 | 华润三九\n　 1药城 ¥9.80");
+  await sleep(300);
+  addBot("⚠️ 药师帮授权已过期，无法获取价格。输入「重新授权」可立即重新配置。");
+  step='gml_reauth';
+  showGuideButtons(["重新授权"]);
+}
+async function gmlReauth(text){
+  if(step==='gml_reauth'){
+    addUser(text);showTyping();await sleep(300);hideTyping();
+    addBot("好的，请输入您的药师帮手机号：");
+    step='gml_phone';
+    showGuideButtons(["13476350691"]);
+  }else if(step==='gml_phone'){
+    addUser(text);showTyping();await sleep(300);hideTyping();
+    addBot("收到，请输入密码：");
+    step='gml_pwd';
+    showGuideButtons(["13476350691"]);
+  }else if(step==='gml_pwd'){
+    addUser(text);showTyping();await sleep(500);hideTyping();
+    addBot("✅ 药师帮重新授权成功！正在重新查询…");
+    await sleep(600);
+    addBot("📊 比价结果（已更新）\n\n1. 感冒灵颗粒 10g×9袋 | 华润三九\n　 1药城 ¥12.50 | 药师帮 ¥11.80 ← 最低\n\n2. 感冒灵胶囊 0.5g×20粒 | 华润三九\n　 1药城 ¥9.80 ← 最低 | 药师帮 ¥10.20\n\n请回复序号选择您要采购的药品 👆");
+    step='gml_pick';
+    showGuideButtons(["1"]);
+  }
+}
+async function gmlDetail(){
+  addUser("1");showTyping();await sleep(600);hideTyping();
+  addBot("📋 感冒灵颗粒 10g×9袋（华润三九）\n\n💰 药师帮　¥11.80　无限制　效期2027-12　有货\n　 1药城　¥12.50　无限制　效期2028-05　充足");
+  await sleep(300);
+  addBot("💡 药师帮价格最低 ¥11.80/盒，比1药城便宜 ¥0.70（约6%）。两家都无起购限制，但1药城有效期更长。注重价格选药师帮，注重效期选1药城。\n\n🔗 去药师帮看看：https://dian2.ysbang.cn/#/cart\n🛒 1药城购物车：https://mall.yaoex.com/v2/cart/#/home?useCache=null");
+  addBot("🕐 价格采集时间：2026-03-18 14:35",true);
+  await sleep(300);
+  addBot("还需要查其他药品吗？😊");
+  step='ready';
+  updateGuide();
+}
+
+// 板蓝根 — 仅1药城
+async function sceneBanlangen(){
+  usedScenes.add('板蓝根');
+  addUser("板蓝根有货吗");
+  showTyping();await sleep(800);hideTyping();
+  addBot("🔍 正在为您搜索「板蓝根」...\n\n✅ 1药城 — 已获取\n✅ 药师帮 — 已获取");
+  await sleep(400);
+  addBot("📊 比价结果\n\n1. 板蓝根颗粒 10g×20袋 | 白云山\n　 1药城 ¥8.50 | 药师帮 —\n\n2. 板蓝根颗粒（无糖）3g×9袋 | 广药集团\n　 1药城 ¥11.20 | 药师帮 —\n\n⚠️ 药师帮暂无此药品\n\n请回复序号查看详情 👆");
+  step='blg_pick';
+  showGuideButtons(["1"]);
+}
+async function blgDetail(){
+  addUser("1");showTyping();await sleep(600);hideTyping();
+  addBot("📋 板蓝根颗粒 10g×20袋（白云山）\n\n1药城　¥8.50　无限制　效期2028-09　充足");
+  await sleep(300);
+  addBot("💡 目前仅1药城有货，¥8.50/盒，库存充足，建议直接在1药城采购。\n\n🛒 1药城购物车：https://mall.yaoex.com/v2/cart/#/home?useCache=null");
+  addBot("🕐 价格采集时间：2026-03-18 14:38",true);
+  await sleep(300);
+  addBot("还需要查其他药品吗？😊");
+  step='ready';
+  updateGuide();
+}
+
+// 头孢 — 规格不匹配
+async function sceneCephalosporin(){
+  usedScenes.add('头孢');
+  addUser("头孢 0.5g");
+  showTyping();await sleep(800);hideTyping();
+  addBot("🔍 正在为您搜索「头孢 0.5g」...\n\n✅ 1药城 — 已获取\n✅ 药师帮 — 已获取");
+  await sleep(400);
+  addBot("未找到 0.5g 规格的头孢类药品，为您展示相近规格：");
+  await sleep(300);
+  addBot("📊 比价结果（相近规格）\n\n1. 头孢克肟分散片 0.1g×6片 | 广州白云山\n　 1药城 ¥8.50 | 药师帮 ¥7.90 ← 最低\n\n2. 头孢氨苄胶囊 0.25g×24粒 | 哈药集团\n　 1药城 ¥4.20 ← 最低 | 药师帮 ¥4.50\n\n3. 头孢拉定胶囊 0.25g×20粒 | 石药集团\n　 1药城 ¥5.60 | 药师帮 ¥5.30 ← 最低\n\n请回复序号选择，或输入更具体的药品名称 👆");
+  step='ready';
+  updateGuide();
+}
+
+// ====== 输入路由 ======
+async function sendInput(){
+  const t=inp.value.trim();if(!t)return;inp.value='';
+
+  if(step==='auth_pick'||step==='auth_phone'||step==='auth_pwd'){
+    await authFlow(t);return;
+  }
+  if(step==='gml_reauth'||step==='gml_phone'||step==='gml_pwd'){
+    await gmlReauth(t);return;
+  }
+  if(step==='amx_pick'){await amxDetail();return;}
+  if(step==='ibu_pick'){await ibuDetail();return;}
+  if(step==='gml_pick'){await gmlDetail();return;}
+  if(step==='blg_pick'){await blgDetail();return;}
+
+  // ready 状态 — 匹配药品
+  if(t.includes('阿莫西林')&&!usedScenes.has('阿莫西林')){await sceneAmoxicillin();return;}
+  if((t.includes('布洛芬')||t.includes('芬必得'))&&!usedScenes.has('布洛芬')){await sceneIbuprofen();return;}
+  if(t.includes('感冒灵')&&!usedScenes.has('感冒灵')){await sceneGanmaoing();return;}
+  if(t.includes('板蓝根')&&!usedScenes.has('板蓝根')){await sceneBanlangen();return;}
+  if(t.includes('头孢')&&!usedScenes.has('头孢')){await sceneCephalosporin();return;}
+
+  // 无匹配
+  addUser(t);
+  showTyping();await sleep(500);hideTyping();
+  addBot("抱歉，暂时没有找到相关药品信息，请尝试输入具体药品名称，如：阿莫西林、布洛芬、感冒灵 💊");
+}
+
+// 启动
+sceneIntro();
+</script>
+</body>
+</html>

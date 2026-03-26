@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>壹药城·智能比价助手</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#f0f0f0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;display:flex;justify-content:center;height:100vh}
+.app{width:100%;max-width:420px;height:100vh;display:flex;flex-direction:column;background:#f5f5f5;position:relative}
+.header{background:#d42027;color:#fff;padding:14px 16px;text-align:center;font-size:16px;font-weight:bold;flex-shrink:0;position:sticky;top:0;z-index:10}
+.chat{flex:1;overflow-y:auto;padding:12px 12px 130px 12px;scroll-behavior:smooth}
+.msg{margin-bottom:10px;display:flex;animation:fadeIn .3s ease}
+.msg.user{justify-content:flex-end}
+.msg.bot{justify-content:flex-start}
+.bubble{max-width:85%;padding:10px 14px;border-radius:12px;font-size:14px;line-height:1.6;word-break:break-word;white-space:pre-line}
+.msg.bot .bubble{background:#fff;color:#333;border-bottom-left-radius:2px}
+.msg.user .bubble{background:#d42027;color:#fff;border-bottom-right-radius:2px}
+.bubble.small{font-size:12px;color:#999;padding:6px 14px}
+.card{max-width:92%;background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.1);padding:14px;margin-bottom:10px;overflow-x:auto;animation:fadeIn .3s ease}
+.card-title{font-weight:bold;font-size:14px;margin-bottom:8px}
+.card-subtitle{font-size:12px;color:#666;margin-bottom:8px}
+.card table{width:100%;border-collapse:collapse;font-size:12px;min-width:360px}
+.card th{background:#f3f4f6;padding:8px 6px;border:1px solid #e5e7eb;text-align:left;font-weight:600;white-space:nowrap}
+.card td{padding:8px 6px;border:1px solid #e5e7eb;white-space:nowrap}
+.card tbody tr:nth-child(even){background:#f9fafb}
+.card .highlight{background:#fef2f2!important}
+.card .lowest{color:#d42027;font-weight:bold}
+.card .gray{color:#9ca3af}
+.card .footnote{font-size:12px;color:#666;margin-top:8px}
+.btn-group{margin-bottom:10px;display:flex;flex-direction:column;gap:6px;max-width:85%;animation:fadeIn .3s ease}
+.btn-group a{display:block;text-align:center;padding:10px 16px;border-radius:8px;font-size:14px;text-decoration:none;font-weight:500;cursor:pointer}
+.btn-solid{background:#d42027;color:#fff!important}
+.btn-outline{background:#fff;color:#d42027!important;border:2px solid #d42027}
+.bottom-area{position:fixed;bottom:0;width:100%;max-width:420px;background:#fff;border-top:1px solid #eee;z-index:10}
+.guide-wrap{padding:8px 12px 4px;display:flex;gap:8px;flex-wrap:wrap;min-height:20px;justify-content:center}
+.guide-btn{background:#fff;color:#d42027;border:1.5px solid #d42027;padding:6px 14px;border-radius:20px;font-size:13px;cursor:pointer;white-space:nowrap;font-weight:500}
+.guide-btn:active{background:#d42027;color:#fff}
+.input-bar{padding:6px 12px 10px;display:flex;gap:8px}
+.input-bar input{flex:1;border:1px solid #ddd;border-radius:20px;padding:8px 16px;font-size:14px;outline:none}
+.input-bar button{width:40px;height:40px;border-radius:50%;background:#d42027;color:#fff;border:none;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.hl{color:#d42027;font-weight:bold}
+.cart-float{position:fixed;bottom:110px;right:calc(50% - 190px);width:48px;height:48px;background:#d42027;color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:0 2px 8px rgba(0,0,0,.2);cursor:pointer;z-index:20;transition:transform .2s}
+.cart-float:active{transform:scale(.9)}
+.cart-badge{position:absolute;top:-4px;right:-4px;background:#ff6b00;color:#fff;font-size:11px;font-weight:bold;min-width:20px;height:20px;border-radius:10px;display:flex;align-items:center;justify-content:center;padding:0 5px}
+.cart-float.hidden{display:none}
+.typing{display:flex;gap:4px;padding:10px 14px;align-items:center}
+.typing span{width:6px;height:6px;background:#ccc;border-radius:50%;animation:bounce .6s infinite}
+.typing span:nth-child(2){animation-delay:.15s}
+.typing span:nth-child(3){animation-delay:.3s}
+@keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes cartPop{0%{transform:scale(1)}50%{transform:scale(1.3)}100%{transform:scale(1)}}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">💊 壹药城·智能比价助手</div>
+  <div class="chat" id="chat"></div>
+  <div class="cart-float hidden" id="cartFloat" onclick="openCart()">
+    🛒
+    <div class="cart-badge" id="cartBadge">0</div>
+  </div>
+  <div class="bottom-area">
+    <div id="guideArea">
+      <div class="guide-wrap" id="guideWrap"></div>
+    </div>
+    <div class="input-bar">
+      <input id="chatInput" placeholder="输入药品名称或指令..." onkeydown="if(event.key==='Enter')sendInput()">
+      <button onclick="sendInput()">➤</button>
+    </div>
+  </div>
+</div>
+<script>
+const chat = document.getElementById('chat');
+const guideWrap = document.getElementById('guideWrap');
+const cartFloat = document.getElementById('cartFloat');
+const cartBadge = document.getElementById('cartBadge');
+let usedScenes = new Set();
+let cartCount = 0;
+
+const allQuickOptions = [
+  "帮我查阿莫西林",
+  "查一下布洛芬的价格",
+  "感冒灵多少钱",
+  "板蓝根有货吗",
+  "头孢 0.5g"
+];
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+function scrollBottom() { chat.scrollTop = chat.scrollHeight; }
+
+function addToCart() {
+  cartCount++;
+  cartFloat.classList.remove('hidden');
+  cartBadge.textContent = cartCount;
+  cartFloat.style.animation = 'cartPop .3s ease';
+  setTimeout(() => { cartFloat.style.animation = ''; }, 300);
+}
+
+function openCart() {
+  window.open('https://mall.yaoex.com/v2/cart/#/home?useCache=null', '_blank');
+}
+
+function updateGuide() {
+  guideWrap.innerHTML = '';
+  const remaining = allQuickOptions.filter(o => !usedScenes.has(o));
+  if (remaining.length === 0) {
+    const btn = document.createElement('button');
+    btn.className = 'guide-btn';
+    btn.textContent = '🔄 重新开始';
+    btn.onclick = () => location.reload();
+    guideWrap.appendChild(btn);
+    return;
+  }
+  remaining.forEach(opt => {
+    const btn = document.createElement('button');
+    btn.className = 'guide-btn';
+    btn.textContent = opt;
+    btn.onclick = () => { usedScenes.add(opt); updateGuide(); sceneRouter(opt); };
+    guideWrap.appendChild(btn);
+  });
+}
+
+function highlightPlatforms(text) {
+  return text.replace(/(1药城|药师帮|九州通|小药药)/g, '<span class="hl">$1</span>');
+}
+
+function addBot(text, isSmall) {
+  const d = document.createElement('div');
+  d.className = 'msg bot';
+  const b = document.createElement('div');
+  b.className = 'bubble' + (isSmall ? ' small' : '');
+  b.innerHTML = highlightPlatforms(text.replace(/\n/g, '<br>'));
+  d.appendChild(b);
+  chat.appendChild(d);
+  scrollBottom();
+}
+
+function addUser(text) {
+  const d = document.createElement('div');
+  d.className = 'msg user';
+  const b = document.createElement('div');
+  b.className = 'bubble';
+  b.textContent = text;
+  d.appendChild(b);
+  chat.appendChild(d);
+  scrollBottom();
+}
+
+function addCard(html) {
+  const d = document.createElement('div');
+  d.className = 'card';
+  d.innerHTML = html;
+  chat.appendChild(d);
+  scrollBottom();
+}
+
+function addButtons(items) {
+  const d = document.createElement('div');
+  d.className = 'btn-group';
+  items.forEach(item => {
+    const a = document.createElement('a');
+    a.className = item.style === 'solid' ? 'btn-solid' : 'btn-outline';
+    a.textContent = item.text;
+    if (item.cart) {
+      a.href = 'javascript:void(0)';
+      a.onclick = (e) => { e.preventDefault(); addToCart(); a.textContent = '✅ 已加入'; a.style.opacity = '0.6'; a.onclick = null; };
+    } else {
+      a.href = item.href;
+      a.target = '_blank';
+    }
+    d.appendChild(a);
+  });
+  chat.appendChild(d);
+  scrollBottom();
+}
+
+function showGuideButtons(options, handler) {
+  guideWrap.innerHTML = '';
+  options.forEach(opt => {
+    const btn = document.createElement('button');
+    btn.className = 'guide-btn';
+    btn.textContent = opt;
+    btn.onclick = () => { guideWrap.innerHTML = ''; handler(opt); };
+    guideWrap.appendChild(btn);
+  });
+}
+
+function showTyping() {
+  const d = document.createElement('div');
+  d.className = 'msg bot';
+  d.id = 'typing';
+  d.innerHTML = '<div class="typing"><span></span><span></span><span></span></div>';
+  chat.appendChild(d);
+  scrollBottom();
+}
+
+function hideTyping() {
+  const t = document.getElementById('typing');
+  if (t) t.remove();
+}
+
+function tableHTML(title, headers, rows, footnote) {
+  let h = '<div class="card-title">' + title + '</div><div style="overflow-x:auto"><table><thead><tr>';
+  headers.forEach(th => { h += '<th>' + th + '</th>'; });
+  h += '</tr></thead><tbody>';
+  rows.forEach(row => {
+    const trClass = row._highlight ? ' class="highlight"' : '';
+    h += '<tr' + trClass + '>';
+    row.cells.forEach(cell => {
+      let cls = [];
+      if (cell.lowest) cls.push('lowest');
+      if (cell.gray) cls.push('gray');
+      const clsStr = cls.length ? ' class="' + cls.join(' ') + '"' : '';
+      h += '<td' + clsStr + '>' + cell.v + '</td>';
+    });
+    h += '</tr>';
+  });
+  h += '</tbody></table></div>';
+  if (footnote) h += '<div class="footnote">' + footnote + '</div>';
+  return h;
+}
+
+function detailHTML(title, subtitle, headers, rows) {
+  let h = '<div class="card-title">' + title + '</div>';
+  if (subtitle) h += '<div class="card-subtitle">' + subtitle + '</div>';
+  h += '<div style="overflow-x:auto"><table><thead><tr>';
+  headers.forEach(th => { h += '<th>' + th + '</th>'; });
+  h += '</tr></thead><tbody>';
+  rows.forEach(row => {
+    const trClass = row._highlight ? ' class="highlight"' : '';
+    h += '<tr' + trClass + '>';
+    row.cells.forEach(cell => {
+      let cls = [];
+      if (cell.lowest) cls.push('lowest');
+      h += '<td' + (cls.length ? ' class="' + cls.join(' ') + '"' : '') + '>' + cell.v + '</td>';
+    });
+    h += '</tr>';
+  });
+  h += '</tbody></table></div>';
+  return h;
+}
+
+// === SCENES ===
+
+async function sceneIntro() {
+  showTyping(); await sleep(500); hideTyping();
+  addBot("您好！我是您的智能比价助手 🤖");
+  showTyping(); await sleep(500); hideTyping();
+  addBot("我可以帮您查询药品在各采购平台的价格，一次比多家，省时省力 📊");
+  showTyping(); await sleep(500); hideTyping();
+  addBot("🔒 请放心，我只会帮您查看价格，不会代您下单，账号信息加密保存。");
+  showTyping(); await sleep(600); hideTyping();
+  addBot("首次使用需要先授权平台，目前支持：\n\n1️⃣ 1药城 — 自动关联 ✅\n2️⃣ 药师帮 — 手机号 + 密码\n3️⃣ 九州通 — 手机号 + 密码\n4️⃣ 小药药 — 即将支持 🔜\n5️⃣ 199 — 即将支持 🔜\n\n请选择要授权的平台（输入序号）💊");
+  await sleep(300);
+  showGuideButtons(["2"], async () => {
+    addUser("2");
+    showTyping(); await sleep(400); hideTyping();
+    addBot("好的，来配置药师帮 👇\n请输入您的药师帮手机号：");
+    await sleep(200);
+    showGuideButtons(["13476350691"], async () => {
+      addUser("13476350691");
+      showTyping(); await sleep(300); hideTyping();
+      addBot("收到，请输入密码：");
+      await sleep(200);
+      showGuideButtons(["13476350691"], async () => {
+        addUser("13476350691");
+        showTyping(); await sleep(500); hideTyping();
+        addBot("✅ 药师帮授权成功！还需要授权其他平台吗？或者直接告诉我您想查什么药？");
+        await sleep(300);
+        updateGuide();
+      });
+    });
+  });
+}
+
+async function sceneRouter(opt) {
+  if (opt === "帮我查阿莫西林") await sceneAmoxicillin();
+  else if (opt === "查一下布洛芬的价格") await sceneIbuprofen();
+  else if (opt === "感冒灵多少钱") await sceneGanmaoing();
+  else if (opt === "板蓝根有货吗") await sceneBanlangen();
+  else if (opt === "头孢 0.5g") await sceneCephalosporin();
+}
+
+// 场景二：阿莫西林 — 1药城最低价 → 自动加购物车
+async function sceneAmoxicillin() {
+  addUser("帮我查阿莫西林");
+  showTyping(); await sleep(800); hideTyping();
+  addBot("🔍 正在为您搜索「阿莫西林」...\n\n✅ 1药城 — 已获取\n✅ 药师帮 — 已获取");
+  await sleep(400);
+  addCard(tableHTML("📊 比价结果", ["#","药品名称","规格","厂家","1药城","药师帮"], [
+    {cells:[{v:"1"},{v:"阿莫西林胶囊"},{v:"0.25g×50粒"},{v:"哈药集团"},{v:"¥3.50",lowest:true},{v:"¥3.73"}]},
+    {cells:[{v:"2"},{v:"阿莫西林胶囊"},{v:"0.25g×24粒"},{v:"联邦制药"},{v:"¥2.60",lowest:true},{v:"¥2.95"}]},
+    {cells:[{v:"3"},{v:"阿莫西林颗粒"},{v:"0.125g×12袋"},{v:"白云山"},{v:"¥3.90",lowest:true},{v:"¥4.05"}]}
+  ]));
+  await sleep(300);
+  addBot("请回复序号选择您要采购的药品 👆");
+  showGuideButtons(["1"], async () => {
+    addUser("1");
+    showTyping(); await sleep(600); hideTyping();
+    addCard(detailHTML("📋 阿莫西林胶囊 0.25g×50粒", "哈药集团 / 益萨林", ["平台","单价","起购量","有效期","库存"], [
+      {_highlight:true, cells:[{v:"💰 1药城"},{v:"¥3.50",lowest:true},{v:"无限制"},{v:"2028-10"},{v:"充足"}]},
+      {cells:[{v:"药师帮"},{v:"¥3.73"},{v:"80盒起"},{v:"2028-08"},{v:"限购100盒"}]}
+    ]));
+    await sleep(300);
+    addBot("💡 1药城价格最低 ¥3.50/盒，比药师帮便宜 ¥0.23（约6%），且无起购量限制、有效期更长，建议直接在1药城采购。");
+    await sleep(200);
+    addButtons([
+      {text:"🛒 加入1药城购物车", cart:true, style:"solid"}
+    ]);
+    addBot("🕐 价格采集时间：2026-03-18 14:30", true);
+    await sleep(300);
+    addBot("还需要查其他药品吗？😊");
+    updateGuide();
+  });
+}
+
+// 场景三：布洛芬 — 药师帮最低价 → 给药师帮链接
+async function sceneIbuprofen() {
+  addUser("查一下布洛芬的价格");
+  showTyping(); await sleep(800); hideTyping();
+  addBot("🔍 正在为您搜索「布洛芬」...\n\n✅ 1药城 — 已获取\n✅ 药师帮 — 已获取");
+  await sleep(400);
+  addCard(tableHTML("📊 比价结果", ["#","药品名称","规格","厂家","1药城","药师帮"], [
+    {cells:[{v:"1"},{v:"布洛芬缓释胶囊"},{v:"0.3g×20粒"},{v:"中美史克"},{v:"¥12.50"},{v:"¥11.20",lowest:true}]},
+    {cells:[{v:"2"},{v:"布洛芬片"},{v:"0.2g×24片"},{v:"恒瑞医药"},{v:"¥6.10"},{v:"¥5.80",lowest:true}]}
+  ]));
+  await sleep(300);
+  addBot("请回复序号选择您要采购的药品 👆");
+  showGuideButtons(["1"], async () => {
+    addUser("1");
+    showTyping(); await sleep(600); hideTyping();
+    addCard(detailHTML("📋 布洛芬缓释胶囊 0.3g×20粒", "中美史克 / 芬必得", ["平台","单价","起购量","有效期","库存"], [
+      {_highlight:true, cells:[{v:"💰 药师帮"},{v:"¥11.20",lowest:true},{v:"50盒起"},{v:"2028-03"},{v:"有货"}]},
+      {cells:[{v:"1药城"},{v:"¥12.50"},{v:"无限制"},{v:"2028-06"},{v:"充足"}]}
+    ]));
+    await sleep(300);
+    addBot("💡 药师帮价格最低 ¥11.20/盒，比1药城便宜 ¥1.30（约10%），但需50盒起购。如采购量达标建议选择药师帮；如需灵活补货，1药城无起购限制。");
+    await sleep(200);
+    addButtons([
+      {text:"🔗 去药师帮看看", href:"https://dian2.ysbang.cn/#/cart", style:"outline"},
+      {text:"🛒 加入1药城购物车", cart:true, style:"solid"}
+    ]);
+    addBot("🕐 价格采集时间：2026-03-18 14:32", true);
+    await sleep(300);
+    addBot("还需要查其他药品吗？😊");
+    updateGuide();
+  });
+}
+
+// 场景四：感冒灵 — 授权过期 → 重新授权后药师帮最低
+async function sceneGanmaoing() {
+  addUser("感冒灵多少钱");
+  showTyping(); await sleep(800); hideTyping();
+  addBot("🔍 正在为您搜索「感冒灵」...\n\n✅ 1药城 — 已获取\n❌ 药师帮 — 授权已过期");
+  await sleep(400);
+  addCard(tableHTML("📊 比价结果（仅展示可用平台）", ["#","药品名称","规格","厂家","1药城"], [
+    {cells:[{v:"1"},{v:"感冒灵颗粒"},{v:"10g×9袋"},{v:"华润三九"},{v:"¥12.50"}]},
+    {cells:[{v:"2"},{v:"感冒灵胶囊"},{v:"0.5g×20粒"},{v:"华润三九"},{v:"¥9.80"}]}
+  ]));
+  await sleep(300);
+  addBot("⚠️ 药师帮授权已过期，无法获取价格。");
+  showGuideButtons(["重新授权"], async () => {
+    addUser("重新授权");
+    showTyping(); await sleep(300); hideTyping();
+    addBot("好的，请输入您的药师帮手机号：");
+    showGuideButtons(["13476350691"], async () => {
+      addUser("13476350691");
+      showTyping(); await sleep(300); hideTyping();
+      addBot("收到，请输入密码：");
+      showGuideButtons(["13476350691"], async () => {
+        addUser("13476350691");
+        showTyping(); await sleep(500); hideTyping();
+        addBot("✅ 药师帮重新授权成功！正在重新查询…");
+        await sleep(600);
+        addCard(tableHTML("📊 比价结果（已更新）", ["#","药品名称","规格","厂家","1药城","药师帮"], [
+          {cells:[{v:"1"},{v:"感冒灵颗粒"},{v:"10g×9袋"},{v:"华润三九"},{v:"¥12.50"},{v:"¥11.80",lowest:true}]},
+          {cells:[{v:"2"},{v:"感冒灵胶囊"},{v:"0.5g×20粒"},{v:"华润三九"},{v:"¥9.80",lowest:true},{v:"¥10.20"}]}
+        ]));
+        await sleep(300);
+        addBot("请回复序号选择您要采购的药品 👆");
+        showGuideButtons(["1"], async () => {
+          addUser("1");
+          showTyping(); await sleep(600); hideTyping();
+          addCard(detailHTML("📋 感冒灵颗粒 10g×9袋", "华润三九", ["平台","单价","起购量","有效期","库存"], [
+            {_highlight:true, cells:[{v:"💰 药师帮"},{v:"¥11.80",lowest:true},{v:"无限制"},{v:"2027-12"},{v:"有货"}]},
+            {cells:[{v:"1药城"},{v:"¥12.50"},{v:"无限制"},{v:"2028-05"},{v:"充足"}]}
+          ]));
+          await sleep(300);
+          addBot("💡 药师帮价格最低 ¥11.80/盒，比1药城便宜 ¥0.70（约6%）。两家都无起购限制，但1药城有效期更长。注重价格选药师帮，注重效期选1药城。");
+          await sleep(200);
+          addButtons([
+            {text:"🔗 去药师帮看看", href:"https://dian2.ysbang.cn/#/cart", style:"outline"},
+            {text:"🛒 加入1药城购物车", cart:true, style:"solid"}
+          ]);
+          addBot("🕐 价格采集时间：2026-03-18 14:35", true);
+          await sleep(300);
+          addBot("还需要查其他药品吗？😊");
+          updateGuide();
+        });
+      });
+    });
+  });
+}
+
+// 场景五：板蓝根 — 仅1药城有货 → 自动加购物车
+async function sceneBanlangen() {
+  addUser("板蓝根有货吗");
+  showTyping(); await sleep(800); hideTyping();
+  addBot("🔍 正在为您搜索「板蓝根」...\n\n✅ 1药城 — 已获取\n✅ 药师帮 — 已获取");
+  await sleep(400);
+  addCard(tableHTML("📊 比价结果", ["#","药品名称","规格","厂家","1药城","药师帮"], [
+    {cells:[{v:"1"},{v:"板蓝根颗粒"},{v:"10g×20袋"},{v:"白云山"},{v:"¥8.50"},{v:"—",gray:true}]},
+    {cells:[{v:"2"},{v:"板蓝根颗粒（无糖）"},{v:"3g×9袋"},{v:"广药集团"},{v:"¥11.20"},{v:"—",gray:true}]}
+  ], "⚠️ 药师帮暂无此药品"));
+  await sleep(300);
+  addBot("请回复序号查看详情 👆");
+  showGuideButtons(["1"], async () => {
+    addUser("1");
+    showTyping(); await sleep(600); hideTyping();
+    addCard(detailHTML("📋 板蓝根颗粒 10g×20袋", "白云山", ["平台","单价","起购量","有效期","库存"], [
+      {_highlight:true, cells:[{v:"1药城"},{v:"¥8.50",lowest:true},{v:"无限制"},{v:"2028-09"},{v:"充足"}]}
+    ]));
+    await sleep(300);
+    addBot("💡 目前仅1药城有货，¥8.50/盒，库存充足，建议直接在1药城采购。");
+    await sleep(200);
+    addButtons([
+      {text:"🛒 加入1药城购物车", cart:true, style:"solid"}
+    ]);
+    addBot("🕐 价格采集时间：2026-03-18 14:38", true);
+    await sleep(300);
+    addBot("还需要查其他药品吗？😊");
+    updateGuide();
+  });
+}
+
+// 场景六：头孢 — 规格不匹配
+async function sceneCephalosporin() {
+  addUser("头孢 0.5g");
+  showTyping(); await sleep(800); hideTyping();
+  addBot("🔍 正在为您搜索「头孢 0.5g」...\n\n✅ 1药城 — 已获取\n✅ 药师帮 — 已获取");
+  await sleep(400);
+  addBot("未找到 0.5g 规格的头孢类药品，为您展示相近规格：");
+  await sleep(300);
+  addCard(tableHTML("📊 比价结果（相近规格）", ["#","药品名称","规格","厂家","1药城","药师帮"], [
+    {cells:[{v:"1"},{v:"头孢克肟分散片"},{v:"0.1g×6片"},{v:"广州白云山"},{v:"¥8.50"},{v:"¥7.90",lowest:true}]},
+    {cells:[{v:"2"},{v:"头孢氨苄胶囊"},{v:"0.25g×24粒"},{v:"哈药集团"},{v:"¥4.20",lowest:true},{v:"¥4.50"}]},
+    {cells:[{v:"3"},{v:"头孢拉定胶囊"},{v:"0.25g×20粒"},{v:"石药集团"},{v:"¥5.60"},{v:"¥5.30",lowest:true}]}
+  ]));
+  await sleep(300);
+  addBot("请回复序号选择，或输入更具体的药品名称 👆");
+  updateGuide();
+}
+
+// 输入框匹配逻辑
+const triggerMap = {
+  "阿莫西林": "帮我查阿莫西林",
+  "布洛芬": "查一下布洛芬的价格",
+  "芬必得": "查一下布洛芬的价格",
+  "感冒灵": "感冒灵多少钱",
+  "板蓝根": "板蓝根有货吗",
+  "头孢": "头孢 0.5g",
+  "重新授权": "__reauth__",
+  "1": "__select1__",
+  "2": "__select2__",
+  "3": "__select3__",
+  "13476350691": "__auth_input__"
+};
+
+let pendingInputHandler = null;
+
+function sendInput() {
+  const input = document.getElementById('chatInput');
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+
+  // 如果有待处理的输入回调（如选序号、输入账号），优先走回调
+  if (pendingInputHandler) {
+    const handler = pendingInputHandler;
+    pendingInputHandler = null;
+    guideWrap.innerHTML = '';
+    handler(text);
+    return;
+  }
+
+  // 匹配场景触发词
+  for (const [keyword, scene] of Object.entries(triggerMap)) {
+    if (text.includes(keyword) && allQuickOptions.includes(scene) && !usedScenes.has(scene)) {
+      usedScenes.add(scene);
+      guideWrap.innerHTML = '';
+      sceneRouter(scene);
+      return;
+    }
+  }
+
+  // 无匹配 → 默认回复
+  addUser(text);
+  setTimeout(() => {
+    addBot("抱歉，暂时没有找到相关药品信息，请尝试输入具体药品名称，如：阿莫西林、布洛芬、感冒灵 💊");
+  }, 500);
+}
+
+// 让 showGuideButtons 同时注册 pendingInputHandler
+const _origShowGuide = showGuideButtons;
+showGuideButtons = function(options, handler) {
+  _origShowGuide(options, handler);
+  pendingInputHandler = (text) => {
+    // 找最接近的选项
+    const match = options.find(o => text.includes(o) || o.includes(text));
+    if (match) {
+      handler(match);
+    } else if (options.length === 1) {
+      handler(options[0]);
+    } else {
+      addUser(text);
+      setTimeout(() => addBot("请从以下选项中选择哦 👆"), 400);
+      _origShowGuide(options, handler);
+    }
+  };
+};
+
+// Start
+sceneIntro();
+</script>
+</body>
+</html>

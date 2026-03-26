@@ -1,0 +1,955 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>异常处理 - 本草比价助手</title>
+    <style>
+        :root {
+            --color-primary: #E53935;
+            --color-primary-hover: #D32F2F;
+            --color-brand-green: #4CAF50;
+            --color-sidebar-bg: #1A1A2E;
+            --color-sidebar-hover: #2A2A4A;
+            --color-bg: #FFFFFF;
+            --color-gray-bg: #F5F5F5;
+            --color-text-main: #333333;
+            --color-text-sub: #888888;
+            --color-border: #E0E0E0;
+            --font-family: -apple-system, "Microsoft YaHei", sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: var(--font-family);
+            background-color: var(--color-bg);
+            color: var(--color-text-main);
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .app-container {
+            display: flex;
+            height: 100%;
+        }
+
+        /* 左侧边栏 */
+        .sidebar {
+            width: 260px;
+            background-color: var(--color-sidebar-bg);
+            color: white;
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+        }
+
+        .sidebar-top {
+            padding: 20px;
+        }
+
+        .brand {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-new-chat {
+            width: 100%;
+            height: 40px;
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.2);
+            background: transparent;
+            color: white;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .btn-new-chat:hover {
+            background-color: rgba(255,255,255,0.1);
+        }
+
+        .history-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0 12px;
+        }
+
+        .history-item {
+            height: 44px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            padding: 0 12px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            margin-bottom: 4px;
+        }
+
+        .history-item:hover {
+            background-color: var(--color-sidebar-hover);
+        }
+
+        .history-item.active {
+            background-color: var(--color-sidebar-hover);
+        }
+
+        .history-item .icon {
+            margin-right: 8px;
+            font-size: 14px;
+        }
+
+        .history-item .title {
+            flex: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .history-item .time {
+            font-size: 12px;
+            color: #888888;
+        }
+
+        .sidebar-bottom {
+            padding: 20px;
+        }
+
+        .sidebar-bottom .divider {
+            height: 1px;
+            background-color: rgba(255,255,255,0.1);
+            margin-bottom: 16px;
+        }
+
+        .btn-bottom {
+            width: 100%;
+            height: 40px;
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.3);
+            background: transparent;
+            color: white;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
+        .btn-bottom:last-child {
+            margin-bottom: 0;
+        }
+
+        .btn-bottom:hover {
+            background-color: rgba(255,255,255,0.1);
+        }
+
+        /* 右侧主区 */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background-color: var(--color-bg);
+            min-width: 0;
+        }
+
+        .top-bar {
+            height: 60px;
+            border-bottom: 1px solid var(--color-border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 24px;
+            flex-shrink: 0;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+            z-index: 10;
+        }
+
+        .top-bar-left {
+            font-size: 16px;
+            font-weight: bold;
+        }
+
+        .top-bar-right {
+            display: flex;
+            gap: 16px;
+        }
+
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+            color: var(--color-text-main);
+        }
+
+        .status-item .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        .status-item .dot.green { background-color: var(--color-brand-green); }
+        .status-item .dot.gray { background-color: #DDDDDD; }
+        .status-item.disabled { color: #999999; }
+
+        /* 对话区 */
+        .chat-area {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px 40px;
+            scroll-behavior: smooth;
+        }
+
+        .chat-container {
+            max-width: 800px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+            padding-bottom: 20px;
+        }
+
+        .message {
+            display: flex;
+            gap: 16px;
+            width: 100%;
+            opacity: 0;
+            transform: translateY(10px);
+            animation: fadeInMsg 0.5s forwards;
+        }
+
+        @keyframes fadeInMsg {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message.user {
+            flex-direction: row-reverse;
+        }
+
+        .message-content {
+            max-width: 80%;
+        }
+
+        .message.agent .message-content {
+            width: 100%;
+        }
+
+        .bubble {
+            padding: 12px 16px;
+            border-radius: 12px;
+            font-size: 15px;
+            line-height: 1.6;
+            word-break: break-word;
+        }
+
+        .bubble.gray {
+            background-color: var(--color-gray-bg);
+            color: #333333;
+            border-top-left-radius: 4px;
+        }
+
+        .bubble.red {
+            background-color: var(--color-primary);
+            color: white;
+            border-top-right-radius: 4px;
+        }
+
+        .avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background-color: #E8F5E9;
+            color: var(--color-brand-green);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 16px;
+            flex-shrink: 0;
+        }
+
+        /* 异常处理特殊样式 */
+        .scene-title {
+            text-align: center;
+            font-size: 12px;
+            color: #999999;
+            margin: 10px 0;
+        }
+
+        .scene-divider {
+            display: flex;
+            align-items: center;
+            text-align: center;
+            color: #BBBBBB;
+            font-size: 12px;
+            margin: 20px 0;
+        }
+
+        .scene-divider::before,
+        .scene-divider::after {
+            content: '';
+            flex: 1;
+            border-bottom: 1px dashed #E0E0E0;
+        }
+
+        .scene-divider:not(:empty)::before {
+            margin-right: 16px;
+        }
+
+        .scene-divider:not(:empty)::after {
+            margin-left: 16px;
+        }
+
+        /* 提示卡片 */
+        .alert-card {
+            border-radius: 12px;
+            padding: 16px;
+            margin-top: 8px;
+            font-size: 14px;
+            line-height: 1.6;
+            overflow: hidden;
+        }
+
+        .alert-card.orange {
+            background-color: #FFF3E0;
+            border-left: 4px solid #FF9800;
+        }
+
+        .alert-card.gray {
+            background-color: #F5F5F5;
+        }
+
+        .alert-card.blue {
+            background-color: #E3F2FD;
+            border-left: 4px solid #2196F3;
+        }
+
+        .alert-card.purple {
+            background-color: #F3E5F5;
+        }
+
+        .alert-title {
+            font-size: 16px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+            color: #333333;
+        }
+
+        .alert-desc {
+            color: #666666;
+            margin-bottom: 12px;
+        }
+
+        .alert-list {
+            list-style: none;
+            margin-bottom: 12px;
+            color: #555555;
+        }
+
+        .alert-list li {
+            margin-bottom: 6px;
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+        }
+
+        .alert-actions {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-top: 16px;
+        }
+
+        /* 按钮与链接 */
+        .btn-orange {
+            background-color: #FF9800;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+        }
+        
+        .btn-orange:hover {
+            background-color: #F57C00;
+        }
+
+        .btn-outline-red {
+            background-color: transparent;
+            color: var(--color-primary);
+            border: 1px solid var(--color-primary);
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            transition: all 0.2s;
+        }
+
+        .btn-outline-red:hover {
+            background-color: var(--color-primary);
+            color: white;
+        }
+
+        .link-gray {
+            color: #888888;
+            text-decoration: none;
+            font-size: 14px;
+        }
+
+        .link-gray:hover {
+            color: #555555;
+            text-decoration: underline;
+        }
+
+        .link-green {
+            color: var(--color-brand-green);
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .link-green:hover {
+            text-decoration: underline;
+        }
+
+        /* 快捷建议标签 */
+        .tag-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .tag-item {
+            background-color: white;
+            border: 1px solid var(--color-border);
+            padding: 6px 12px;
+            border-radius: 16px;
+            font-size: 13px;
+            color: #333333;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.2s;
+        }
+
+        .tag-item:hover {
+            border-color: var(--color-primary);
+            color: var(--color-primary);
+        }
+
+        /* 简化版比价结果卡片 */
+        .result-card {
+            background: white;
+            border-radius: 12px;
+            border: 1px solid var(--color-border);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+            width: 100%;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+
+        .rc-header {
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--color-border);
+        }
+
+        .rc-title {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 4px;
+        }
+
+        .rc-desc {
+            font-size: 13px;
+            color: #888888;
+        }
+
+        .price-row {
+            display: flex;
+            align-items: center;
+            padding: 12px 16px;
+            border-bottom: 1px solid #F0F0F0;
+        }
+
+        .price-row:last-child {
+            border-bottom: none;
+        }
+
+        .pr-platform {
+            width: 100px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+        }
+
+        .pr-price {
+            font-size: 18px;
+            font-weight: bold;
+            flex: 1;
+        }
+
+        .pr-price.red { color: var(--color-primary); }
+        .pr-price.normal { color: #333333; }
+        .pr-price.gray-italic { color: #999999; font-style: italic; font-size: 14px; font-weight: normal; }
+        .pr-price.blue-loading { color: #2196F3; font-size: 14px; font-weight: normal; display: flex; align-items: center; gap: 6px; }
+
+        .rc-footer-tip {
+            padding: 12px 16px;
+            background-color: #FAFAFA;
+            font-size: 13px;
+            color: #666666;
+            text-align: center;
+        }
+
+        .rc-footer-tip.green-bg {
+            background-color: #E8F5E9;
+            text-align: left;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        /* Loading 动画 */
+        .spinner {
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(33, 150, 243, 0.3);
+            border-top-color: #2196F3;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* 底部输入区 */
+        .input-area {
+            padding: 16px 40px;
+            background-color: white;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.02);
+            z-index: 10;
+            flex-shrink: 0;
+        }
+
+        .input-container {
+            max-width: 800px;
+            margin: 0 auto;
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        #chat-input {
+            width: 100%;
+            height: 48px;
+            border-radius: 24px;
+            border: 1px solid var(--color-border);
+            padding: 0 56px 0 20px;
+            font-size: 15px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        #chat-input:focus {
+            border-color: var(--color-primary);
+        }
+
+        .btn-send {
+            position: absolute;
+            right: 4px;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background-color: var(--color-primary);
+            color: white;
+            border: none;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .btn-send:hover {
+            background-color: var(--color-primary-hover);
+        }
+
+        .input-hint {
+            text-align: center;
+            font-size: 12px;
+            color: #BBBBBB;
+            margin-top: 8px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="app-container">
+        <!-- 1. 左侧边栏 -->
+        <aside class="sidebar">
+            <div class="sidebar-top">
+                <a href="welcome.html" class="brand" style="text-decoration: none; color: white;">🌿 本草比价</a>
+                <button class="btn-new-chat" onclick="window.location.href='welcome.html'">+ 新对话</button>
+            </div>
+            
+            <div class="history-list">
+                <div class="history-item active">
+                    <span class="icon">💬</span>
+                    <span class="title">异常处理演示</span>
+                    <span class="time">今天</span>
+                </div>
+                <div class="history-item">
+                    <span class="icon">💬</span>
+                    <span class="title">阿莫西林比价</span>
+                    <span class="time">昨天</span>
+                </div>
+            </div>
+
+            <div class="sidebar-bottom">
+                <div class="divider"></div>
+                <button class="btn-bottom" onclick="window.location.href='auth.html?manage=true'">
+                    <span>⚙️</span> 平台授权管理
+                </button>
+                <button class="btn-bottom" onclick="window.location.href='index.html'">
+                    <span>←</span> 返回1药城
+                </button>
+            </div>
+        </aside>
+
+        <!-- 2. 右侧主区 -->
+        <main class="main-content">
+            <!-- 顶部栏 -->
+            <header class="top-bar">
+                <div class="top-bar-left">
+                    <a href="welcome.html" style="margin-right: 8px; color: #666; text-decoration: none;">←</a>
+                    异常处理演示
+                </div>
+                <div class="top-bar-right">
+                    <div class="status-item"><span class="dot green"></span>1药城</div>
+                    <div class="status-item disabled"><span class="dot gray"></span>药师帮</div>
+                    <div class="status-item disabled"><span class="dot gray"></span>小药药</div>
+                </div>
+            </header>
+
+            <!-- 对话区 -->
+            <div class="chat-area" id="chat-area">
+                <div class="chat-container" id="chat-container">
+                    
+                    <div class="scene-title">—— 异常处理场景演示 ——</div>
+
+                    <!-- 场景 A：授权过期 -->
+                    <div class="message user">
+                        <div class="message-content">
+                            <div class="bubble red">帮我查一下蒲地蓝消炎口服液的价格</div>
+                        </div>
+                    </div>
+
+                    <div class="message agent">
+                        <div class="avatar">🌿</div>
+                        <div class="message-content">
+                            <div class="bubble gray">
+                                正在为您查询...<br>
+                                🔍 查询1药城... ✅<br>
+                                🔍 查询药师帮... ❌ 登录已过期
+                            </div>
+                            
+                            <div class="alert-card orange">
+                                <div class="alert-title">⚠️ 药师帮授权已过期</div>
+                                <div class="alert-desc">您的药师帮登录状态已失效，需要重新授权才能查询该平台价格。<br>本次已为您查询到1药城的价格：</div>
+                                <div class="alert-actions">
+                                    <a href="auth.html" class="btn-orange">重新授权药师帮</a>
+                                    <a href="#" class="link-gray">先看1药城的结果</a>
+                                </div>
+                            </div>
+
+                            <div class="result-card">
+                                <div class="rc-header">
+                                    <div class="rc-title">蒲地蓝消炎口服液 10ml×10支</div>
+                                    <div class="rc-desc">济川药业</div>
+                                </div>
+                                <div class="price-row">
+                                    <div class="pr-platform"><span class="p-icon">🟢</span> <b>1药城</b></div>
+                                    <div class="pr-price red">¥28.50</div>
+                                </div>
+                                <div class="price-row">
+                                    <div class="pr-platform"><span class="p-icon">⚪</span> 药师帮</div>
+                                    <div class="pr-price gray-italic">授权过期，暂无数据</div>
+                                </div>
+                                <div class="rc-footer-tip">重新授权药师帮后，可查看完整比价结果</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="scene-divider">场景切换</div>
+
+                    <!-- 场景 B：搜索无结果 -->
+                    <div class="message user">
+                        <div class="message-content">
+                            <div class="bubble red">查一下 xyz药品 的价格</div>
+                        </div>
+                    </div>
+
+                    <div class="message agent">
+                        <div class="avatar">🌿</div>
+                        <div class="message-content">
+                            <div class="alert-card gray">
+                                <div class="alert-title">🔍 未找到匹配的药品</div>
+                                <div class="alert-desc">在已连接的平台中没有找到"xyz药品"，您可以试试：</div>
+                                <ul class="alert-list">
+                                    <li>💊 检查药品名称是否正确</li>
+                                    <li>🏭 尝试使用通用名（如"对乙酰氨基酚"而非"泰诺"）</li>
+                                    <li>📝 尝试输入厂家名称（如"联邦制药 阿莫西林"）</li>
+                                </ul>
+                                <div class="tag-list">
+                                    <a href="chat.html" class="tag-item">阿莫西林</a>
+                                    <a href="chat.html" class="tag-item">布洛芬</a>
+                                    <a href="chat.html" class="tag-item">感冒灵颗粒</a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="scene-divider">场景切换</div>
+
+                    <!-- 场景 C：平台暂时不可用 -->
+                    <div class="message user">
+                        <div class="message-content">
+                            <div class="bubble red">查一下复方甘草片多少钱</div>
+                        </div>
+                    </div>
+
+                    <div class="message agent">
+                        <div class="avatar">🌿</div>
+                        <div class="message-content">
+                            <div class="bubble gray">
+                                正在为您查询...<br>
+                                🔍 查询1药城... ✅<br>
+                                🔍 查询药师帮... ⏳ 平台响应超时
+                            </div>
+
+                            <div class="alert-card blue">
+                                <div class="alert-title">ℹ️ 药师帮暂时连接不上</div>
+                                <div class="alert-desc">可能是该平台正在维护或网络波动，已为您展示1药城的价格。药师帮的结果稍后自动重试。</div>
+                            </div>
+
+                            <div class="result-card">
+                                <div class="price-row">
+                                    <div class="pr-platform"><span class="p-icon">🟢</span> <b>1药城</b></div>
+                                    <div class="pr-price red">¥6.80</div>
+                                </div>
+                                <div class="price-row">
+                                    <div class="pr-platform"><span class="p-icon">⏳</span> 药师帮</div>
+                                    <div class="pr-price blue-loading">
+                                        <div class="spinner"></div> 查询中，稍后自动刷新
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="scene-divider">场景切换</div>
+
+                    <!-- 场景 D：能力边界 — 用户要求下单 -->
+                    <div class="message user">
+                        <div class="message-content">
+                            <div class="bubble red">阿莫西林在1药城最便宜，帮我直接下单吧</div>
+                        </div>
+                    </div>
+
+                    <div class="message agent">
+                        <div class="avatar">🌿</div>
+                        <div class="message-content">
+                            <div class="alert-card purple">
+                                <div class="alert-title">🤝 暂不支持代为下单</div>
+                                <div class="alert-desc">抱歉，我目前只能帮您查价比价，还不能直接下单哦 😊<br>您可以点击下方按钮跳转到1药城商品页自行下单：</div>
+                                <div class="alert-actions">
+                                    <a href="index.html" class="btn-outline-red">🛒 去1药城查看该商品</a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="scene-divider">场景切换</div>
+
+                    <!-- 场景 E：信息不足 — 用户表达模糊 -->
+                    <div class="message user">
+                        <div class="message-content">
+                            <div class="bubble red">查个药</div>
+                        </div>
+                    </div>
+
+                    <div class="message agent">
+                        <div class="avatar">🌿</div>
+                        <div class="message-content">
+                            <div class="bubble gray">
+                                没问题！请告诉我您想查哪个药品？<br><br>
+                                您可以输入：<br>
+                                · 药品名称，如"阿莫西林"<br>
+                                · 药品名 + 规格，如"布洛芬 0.2g"<br>
+                                · 药品名 + 厂家，如"联邦制药 阿莫西林"
+                            </div>
+                            <div class="tag-list">
+                                <a href="chat.html" class="tag-item">阿莫西林</a>
+                                <a href="chat.html" class="tag-item">布洛芬</a>
+                                <a href="chat.html" class="tag-item">感冒灵颗粒</a>
+                                <a href="chat.html" class="tag-item">蒲地蓝</a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="scene-divider">场景切换</div>
+
+                    <!-- 场景 F：未授权外部平台（仅1药城） -->
+                    <div class="message user">
+                        <div class="message-content">
+                            <div class="bubble red">帮我查一下板蓝根颗粒的价格</div>
+                        </div>
+                    </div>
+
+                    <div class="message agent">
+                        <div class="avatar">🌿</div>
+                        <div class="message-content">
+                            <div class="bubble gray">为您查到了1药城的价格：</div>
+                            
+                            <div class="result-card">
+                                <div class="rc-header">
+                                    <div class="rc-title">板蓝根颗粒 10g×20袋</div>
+                                    <div class="rc-desc">白云山</div>
+                                </div>
+                                <div class="price-row">
+                                    <div class="pr-platform"><span class="p-icon">🟢</span> <b>1药城</b></div>
+                                    <div class="pr-price red">¥12.80</div>
+                                </div>
+                                <div class="rc-footer-tip green-bg">
+                                    <div>💡 目前只连接了1药城。授权药师帮等平台后，可以看到更多平台的价格对比，帮您找到更低价！</div>
+                                    <a href="auth.html?manage=true" class="link-green">去授权更多平台 →</a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- 底部输入区 -->
+            <footer class="input-area">
+                <div class="input-container">
+                    <input type="text" id="chat-input" placeholder="输入药品名称开始比价..." onkeypress="handleKeyPress(event)">
+                    <button class="btn-send" onclick="sendMessage()">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="12" y1="19" x2="12" y2="5"></line>
+                            <polyline points="5 12 12 5 19 12"></polyline>
+                        </svg>
+                    </button>
+                </div>
+                <div class="input-hint">本草仅提供价格查询服务，不代为下单 · 价格数据来自各平台实时查询</div>
+            </footer>
+        </main>
+    </div>
+
+    <script>
+        // 页面加载时依次淡入消息
+        document.addEventListener('DOMContentLoaded', () => {
+            const messages = document.querySelectorAll('.message, .scene-divider, .scene-title');
+            messages.forEach((msg, index) => {
+                msg.style.animationDelay = `${index * 0.15}s`;
+            });
+            
+            // 滚动到底部
+            setTimeout(scrollToBottom, 100);
+        });
+
+        // 滚动到底部
+        function scrollToBottom() {
+            const chatArea = document.getElementById('chat-area');
+            chatArea.scrollTop = chatArea.scrollHeight;
+        }
+
+        // 发送消息
+        function sendMessage() {
+            const input = document.getElementById('chat-input');
+            const text = input.value.trim();
+            if (!text) return;
+
+            // 1. 添加用户消息
+            addMessage(text, 'user');
+            input.value = '';
+            scrollToBottom();
+
+            // 2. 1秒后添加 Agent loading 消息
+            setTimeout(() => {
+                const loadingId = 'msg-' + Date.now();
+                addMessage('正在查询，请稍候... 🔍', 'agent', loadingId);
+                scrollToBottom();
+
+                // 3. 2秒后更新消息
+                setTimeout(() => {
+                    const loadingMsg = document.getElementById(loadingId);
+                    if (loadingMsg) {
+                        loadingMsg.querySelector('.bubble').innerHTML = '抱歉，这是一个 Demo 演示页面，暂不支持实时查询。请参考上方的比价结果示例了解功能效果 😊';
+                    }
+                }, 2000);
+            }, 1000);
+        }
+
+        // 动态添加消息 DOM
+        function addMessage(text, sender, id = '') {
+            const container = document.getElementById('chat-container');
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `message ${sender}`;
+            if (id) msgDiv.id = id;
+            
+            // 新消息不需要延迟动画
+            msgDiv.style.animationDelay = '0s';
+
+            if (sender === 'user') {
+                msgDiv.innerHTML = `
+                    <div class="message-content">
+                        <div class="bubble red">${text}</div>
+                    </div>
+                `;
+            } else {
+                msgDiv.innerHTML = `
+                    <div class="avatar">🌿</div>
+                    <div class="message-content">
+                        <div class="bubble gray">${text}</div>
+                    </div>
+                `;
+            }
+
+            container.appendChild(msgDiv);
+        }
+
+        // 监听回车键
+        function handleKeyPress(e) {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        }
+    </script>
+</body>
+</html>

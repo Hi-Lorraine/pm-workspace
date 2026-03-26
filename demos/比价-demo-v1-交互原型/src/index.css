@@ -1,0 +1,50 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #E53935;
+  --color-brand-green: #4CAF50;
+  --color-bg-main: #F5F5F5;
+  --font-sans: -apple-system, "Microsoft YaHei", sans-serif;
+  --radius-card: 12px;
+}
+
+body {
+  background-color: var(--color-bg-main);
+  font-family: var(--font-sans);
+  color: #1a1a1a;
+}
+
+/* 统一卡片样式类 */
+@utility card {
+  background-color: #ffffff;
+  border-radius: var(--radius-card);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+}
+
+/* 统一主按钮样式类 */
+@utility btn-primary {
+  background-color: var(--color-primary);
+  color: #ffffff;
+  border-radius: 6px;
+  padding: 0.5rem 1rem;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+@utility btn-primary:hover {
+  background-color: #d32f2f;
+  box-shadow: 0 4px 12px rgba(229, 57, 53, 0.2);
+}
+
+/* 统一绿色按钮样式类 */
+@utility btn-green {
+  background-color: var(--color-brand-green);
+  color: #ffffff;
+  border-radius: 6px;
+  padding: 0.5rem 1rem;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+@utility btn-green:hover {
+  background-color: #388e3c;
+  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.2);
+}

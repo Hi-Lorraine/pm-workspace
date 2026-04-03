@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>失活客户召回 — MCP 接口需求</title>
+<style>
+  body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; color: #333; font-size: 14px; line-height: 1.8; }
+  h1 { font-size: 20px; border-bottom: 2px solid #1a73e8; padding-bottom: 8px; margin-top: 30px; }
+  h2 { font-size: 17px; color: #1a73e8; margin-top: 28px; border-left: 4px solid #1a73e8; padding-left: 10px; }
+  h3 { font-size: 15px; color: #333; margin-top: 20px; }
+  table { border-collapse: collapse; width: 100%; margin: 10px 0 18px 0; font-size: 13px; }
+  th { background: #f0f4ff; color: #1a53a8; font-weight: 600; }
+  th, td { border: 1px solid #d0d7e2; padding: 6px 10px; text-align: left; }
+  td:first-child { white-space: nowrap; }
+  .tag { display: inline-block; padding: 1px 8px; border-radius: 3px; font-size: 12px; font-weight: 500; }
+  .tag-must { background: #fee; color: #c00; }
+  .tag-opt { background: #f0f0f0; color: #666; }
+  .tag-confirm { background: #fff3e0; color: #e65100; }
+  .highlight { background: #fffde7; padding: 10px 14px; border-left: 3px solid #fbc02d; margin: 12px 0; font-size: 13px; }
+  .section-desc { color: #555; font-size: 13px; margin: 4px 0 12px 0; }
+  .flow-box { background: #f8f9fa; border: 1px solid #e0e0e0; border-radius: 6px; padding: 14px 18px; margin: 12px 0; font-size: 13px; }
+  .flow-box code { background: #e8f0fe; padding: 2px 6px; border-radius: 3px; font-family: monospace; }
+  hr { border: none; border-top: 1px dashed #ccc; margin: 24px 0; }
+</style>
+</head>
+<body>
+
+<h1>失活客户智能召回 — MCP 接口需求评审</h1>
+<p style="color:#666; font-size:13px;">产品负责人：淼鑫 &nbsp;|&nbsp; 日期：2026-04-03 &nbsp;|&nbsp; 场景：数字BD分身 · 失活客户召回</p>
+
+<div class="highlight">
+  <b>评审目标：</b>确认失活召回场景所需的 MCP 工具接口定义（输入参数 + 输出字段），研发完成 MCP 封装后，产品侧基于此编写 Skills。
+</div>
+
+<!-- ===================== 业务流程 ===================== -->
+<h2>一、业务流程概览</h2>
+
+<div class="flow-box">
+  <b>定时扫描</b>（系统每日自动）→ <b>规则触发</b>（识别失活客户）→ <b>风险评估</b>（AI 计算流失等级）→ <b>话术生成</b>（AI 个性化召回消息）→ <b>消息触达</b>（企微/语音）→ <b>结果推送</b>（通知责任BD跟进）
+</div>
+
+<h3>失活等级定义</h3>
+<table>
+  <tr><th>失活等级</th><th>规则</th><th>触发动作</th></tr>
+  <tr><td>🟡 轻度失活</td><td>连续 7 天未登录</td><td>企微自动发送关怀消息</td></tr>
+  <tr><td>🟠 中度失活</td><td>2 个月未登录</td><td>AI 生成个性化召回话术 + 企微触达</td></tr>
+  <tr><td>🔴 重度失活</td><td>3 个月未下单</td><td>AI 语音外呼 + 推送 BD 人工跟进</td></tr>
+</table>
+
+<!-- ===================== 整体架构 ===================== -->
+<h2>二、Skill → MCP 调用关系</h2>
+
+<table>
+  <tr><th>Skill</th><th>功能</th><th>调用的 MCP 工具</th></tr>
+  <tr><td><b>失活风险扫描</b></td><td>按规则筛选失活客户，输出风险列表</td><td>工具1 + 工具2</td></tr>
+  <tr><td><b>个性化话术生成</b></td><td>根据客户画像生成定制化召回消息</td><td>工具2 + 工具3</td></tr>
+  <tr><td><b>消息触达</b></td><td>通过企微/语音触达客户，结果推送给BD</td><td>工具4 + 工具5</td></tr>
+</table>
+
+<!-- ===================== 工具1 ===================== -->
+<hr>
+<h2>工具 1：查询 BD 名下失活客户列表</h2>
+<p class="section-desc">核心接口。BD 问"我有哪些客户快流失了"，或系统定时扫描触发。</p>
+
+<h3>输入参数</h3>
+<table>
+  <tr><th>参数</th><th>类型</th><th>必填</th><th>说明</th></tr>
+  <tr><td><code>bd_id</code></td><td>string</td><td><span class="tag tag-must">必填</span></td><td>BD 工号，从登录态自动注入</td></tr>
+  <tr><td><code>inactive_type</code></td><td>string</td><td><span class="tag tag-opt">选填</span></td><td>失活等级：light(7天未登录) / medium(2月未登录) / severe(3月未下单)，不传返回全部</td></tr>
+  <tr><td><code>no_login_days</code></td><td>int</td><td><span class="tag tag-opt">选填</span></td><td>自定义未登录天数阈值（灵活查询，覆盖 inactive_type）</td></tr>
+  <tr><td><code>no_order_days</code></td><td>int</td><td><span class="tag tag-opt">选填</span></td><td>自定义未下单天数阈值</td></tr>
+  <tr><td><code>customer_level</code></td><td>string</td><td><span class="tag tag-opt">选填</span></td><td>按客户等级过滤：A / B / C / D</td></tr>
+  <tr><td><code>sort_by</code></td><td>string</td><td><span class="tag tag-opt">选填</span></td><td>排序：risk_level / last_login / purchase_amount，默认 risk_level</td></tr>
+  <tr><td><code>page</code></td><td>int</td><td><span class="tag tag-opt">选填</span></td><td>分页页码，默认 1</td></tr>
+  <tr><td><code>page_size</code></td><td>int</td><td><span class="tag tag-opt">选填</span></td><td>每页条数，默认 20</td></tr>
+</table>
+
+<h3>输出字段</h3>
+<table>
+  <tr><th>字段</th><th>类型</th><th>说明</th></tr>
+  <tr><td><code>customer_id</code></td><td>string</td><td>客户ID</td></tr>
+  <tr><td><code>customer_name</code></td><td>string</td><td>药店名称</td></tr>
+  <tr><td><code>customer_level</code></td><td>string</td><td>客户等级（A/B/C/D）</td></tr>
+  <tr><td><code>customer_type</code></td><td>string</td><td>连锁 / 单体 / 诊所</td></tr>
+  <tr><td><code>inactive_type</code></td><td>string</td><td>失活等级：light / medium / severe</td></tr>
+  <tr><td><code>last_login_date</code></td><td>date</td><td>最近登录日期</td></tr>
+  <tr><td><code>last_order_date</code></td><td>date</td><td>最近下单日期</td></tr>
+  <tr><td><code>days_since_login</code></td><td>int</td><td>距上次登录天数</td></tr>
+  <tr><td><code>days_since_order</code></td><td>int</td><td>距上次下单天数</td></tr>
+  <tr><td><code>purchase_amount_90d</code></td><td>float</td><td>近90天采购额</td></tr>
+  <tr><td><code>purchase_amount_prev_90d</code></td><td>float</td><td>前90天采购额（环比用）</td></tr>
+  <tr><td><code>contact_phone</code></td><td>string</td><td>联系电话</td></tr>
+  <tr><td><code>total_count</code></td><td>int</td><td>符合条件的总客户数</td></tr>
+</table>
+
+<!-- ===================== 工具2 ===================== -->
+<hr>
+<h2>工具 2：查询单个客户详细画像</h2>
+<p class="section-desc">AI 生成个性化话术前，必须先获取客户完整画像信息。</p>
+
+<h3>输入参数</h3>
+<table>
+  <tr><th>参数</th><th>类型</th><th>必填</th><th>说明</th></tr>
+  <tr><td><code>bd_id</code></td><td>string</td><td><span class="tag tag-must">必填</span></td><td>权限校验，只能查自己名下客户</td></tr>
+  <tr><td><code>customer_id</code></td><td>string</td><td><span class="tag tag-must">必填</span></td><td>客户ID</td></tr>
+</table>
+
+<h3>输出字段</h3>
+<table>
+  <tr><th>字段</th><th>类型</th><th>说明</th></tr>
+  <tr><td><code>customer_name</code></td><td>string</td><td>药店名称</td></tr>
+  <tr><td><code>customer_level</code></td><td>string</td><td>等级（A/B/C/D）</td></tr>
+  <tr><td><code>customer_type</code></td><td>string</td><td>连锁 / 单体 / 诊所</td></tr>
+  <tr><td><code>region</code></td><td>string</td><td>所在区域</td></tr>
+  <tr><td><code>bindbd_name</code></td><td>string</td><td>归属 BD 姓名</td></tr>
+  <tr><td><code>last_login_date</code></td><td>date</td><td>最近登录日期</td></tr>
+  <tr><td><code>last_order_date</code></td><td>date</td><td>最近下单日期</td></tr>
+  <tr><td><code>purchase_amount_30d</code></td><td>float</td><td>近30天采购额</td></tr>
+  <tr><td><code>purchase_amount_90d</code></td><td>float</td><td>近90天采购额</td></tr>
+  <tr><td><code>purchase_amount_prev_90d</code></td><td>float</td><td>前90天采购额</td></tr>
+  <tr><td><code>purchase_trend</code></td><td>string</td><td>采购趋势：上升 / 持平 / 下降 / 断崖</td></tr>
+  <tr><td><code>order_count_90d</code></td><td>int</td><td>近90天订单数</td></tr>
+  <tr><td><code>avg_order_amount</code></td><td>float</td><td>平均客单价</td></tr>
+  <tr><td><code>top_categories</code></td><td>array</td><td>常购品类 TOP3（品类名 + 金额占比）</td></tr>
+  <tr><td><code>top_products</code></td><td>array</td><td>常购商品 TOP5（商品名 + 近90天采购量）</td></tr>
+  <tr><td><code>first_order_date</code></td><td>date</td><td>首单日期（客户生命周期）</td></tr>
+  <tr><td><code>contact_phone</code></td><td>string</td><td>联系电话</td></tr>
+  <tr><td><code>last_contact_date</code></td><td>date</td><td>BD 上次联系时间</td></tr>
+</table>
+
+<!-- ===================== 工具3 ===================== -->
+<hr>
+<h2>工具 3：查询客户采购历史</h2>
+<p class="section-desc">生成话术时引用"您上次买的XX"做个性化推荐，提升召回效果。</p>
+
+<h3>输入参数</h3>
+<table>
+  <tr><th>参数</th><th>类型</th><th>必填</th><th>说明</th></tr>
+  <tr><td><code>bd_id</code></td><td>string</td><td><span class="tag tag-must">必填</span></td><td>权限校验</td></tr>
+  <tr><td><code>customer_id</code></td><td>string</td><td><span class="tag tag-must">必填</span></td><td>客户ID</td></tr>
+  <tr><td><code>date_from</code></td><td>date</td><td><span class="tag tag-opt">选填</span></td><td>开始日期，默认近90天</td></tr>
+  <tr><td><code>date_to</code></td><td>date</td><td><span class="tag tag-opt">选填</span></td><td>截止日期，默认今天</td></tr>
+  <tr><td><code>category</code></td><td>string</td><td><span class="tag tag-opt">选填</span></td><td>按品类过滤</td></tr>
+  <tr><td><code>page_size</code></td><td>int</td><td><span class="tag tag-opt">选填</span></td><td>默认 10</td></tr>
+</table>
+
+<h3>输出字段</h3>
+<table>
+  <tr><th>字段</th><th>类型</th><th>说明</th></tr>
+  <tr><td><code>order_id</code></td><td>string</td><td>订单号</td></tr>
+  <tr><td><code>order_date</code></td><td>date</td><td>下单日期</td></tr>
+  <tr><td><code>total_amount</code></td><td>float</td><td>订单金额</td></tr>
+  <tr><td><code>item_count</code></td><td>int</td><td>商品种类数</td></tr>
+  <tr><td><code>top_items</code></td><td>array</td><td>主要商品（商品名 + 数量 + 金额）</td></tr>
+  <tr><td><code>order_status</code></td><td>string</td><td>订单状态</td></tr>
+</table>
+
+<!-- ===================== 工具4 ===================== -->
+<hr>
+<h2>工具 4：发送企微消息</h2>
+<p class="section-desc">触达客户。轻度失活自动发关怀、中度发召回话术。如企微通道不通，MVP 降级为推送给 BD 手动发。</p>
+
+<h3>输入参数</h3>
+<table>
+  <tr><th>参数</th><th>类型</th><th>必填</th><th>说明</th></tr>
+  <tr><td><code>bd_id</code></td><td>string</td><td><span class="tag tag-must">必填</span></td><td>发送人（BD 身份）</td></tr>
+  <tr><td><code>customer_id</code></td><td>string</td><td><span class="tag tag-must">必填</span></td><td>接收客户</td></tr>
+  <tr><td><code>message_type</code></td><td>string</td><td><span class="tag tag-must">必填</span></td><td>text（纯文字）/ card（客户卡片）/ voice_script（语音话术脚本）</td></tr>
+  <tr><td><code>content</code></td><td>string</td><td><span class="tag tag-must">必填</span></td><td>消息内容（AI 生成的话术）</td></tr>
+  <tr><td><code>scheduled_time</code></td><td>datetime</td><td><span class="tag tag-opt">选填</span></td><td>定时发送时间，不传则立即发送</td></tr>
+</table>
+
+<h3>输出字段</h3>
+<table>
+  <tr><th>字段</th><th>类型</th><th>说明</th></tr>
+  <tr><td><code>send_status</code></td><td>string</td><td>success / failed / pending</td></tr>
+  <tr><td><code>send_time</code></td><td>datetime</td><td>实际发送时间</td></tr>
+  <tr><td><code>fail_reason</code></td><td>string</td><td>失败原因（如：客户非好友、消息频率限制等）</td></tr>
+</table>
+
+<!-- ===================== 工具5 ===================== -->
+<hr>
+<h2>工具 5：推送提醒给 BD</h2>
+<p class="section-desc">召回结果或高风险预警推送给责任 BD，闭环最后一步。</p>
+
+<h3>输入参数</h3>
+<table>
+  <tr><th>参数</th><th>类型</th><th>必填</th><th>说明</th></tr>
+  <tr><td><code>bd_id</code></td><td>string</td><td><span class="tag tag-must">必填</span></td><td>目标 BD</td></tr>
+  <tr><td><code>notify_type</code></td><td>string</td><td><span class="tag tag-must">必填</span></td><td>risk_alert（流失预警）/ recall_result（召回结果）/ recall_failed（触达失败需人工跟进）</td></tr>
+  <tr><td><code>customer_id</code></td><td>string</td><td><span class="tag tag-must">必填</span></td><td>涉及的客户</td></tr>
+  <tr><td><code>title</code></td><td>string</td><td><span class="tag tag-must">必填</span></td><td>提醒标题，如"重度失活预警：XX大药房"</td></tr>
+  <tr><td><code>content</code></td><td>string</td><td><span class="tag tag-must">必填</span></td><td>提醒内容摘要</td></tr>
+  <tr><td><code>priority</code></td><td>string</td><td><span class="tag tag-opt">选填</span></td><td>high / medium / low，默认 medium</td></tr>
+</table>
+
+<h3>输出字段</h3>
+<table>
+  <tr><th>字段</th><th>类型</th><th>说明</th></tr>
+  <tr><td><code>notify_status</code></td><td>string</td><td>success / failed</td></tr>
+  <tr><td><code>notify_channel</code></td><td>string</td><td>实际推送渠道（工作台 / 企微 / 短信）</td></tr>
+</table>
+
+<!-- ===================== 权限 ===================== -->
+<hr>
+<h2>权限规则（所有接口通用）</h2>
+<table>
+  <tr><th>规则</th><th>说明</th></tr>
+  <tr><td><b>BD 只能查自己名下客户</b></td><td>所有接口必须校验 bd_id 与 customer_id 的归属关系</td></tr>
+  <tr><td><b>bd_id 从登录态注入</b></td><td>前端不传 bd_id，由中间件从 token 解析注入，防伪造</td></tr>
+  <tr><td><b>越权访问拦截</b></td><td>非名下客户返回"该客户不在您名下"提示，不返回数据</td></tr>
+  <tr><td><b>敏感字段脱敏</b></td><td>手机号中间四位脱敏（如 138****5678），完整号码需二次确认</td></tr>
+</table>
+
+<!-- ===================== 数据确认 ===================== -->
+<hr>
+<h2>需研发确认的数据问题</h2>
+<div class="highlight">以下问题直接决定接口能否实现、字段是否可用，请评审会上逐条确认。</div>
+
+<table>
+  <tr><th>#</th><th>问题</th><th>影响范围</th><th>如果没有的降级方案</th></tr>
+  <tr><td>1</td><td><b>客户登录日志有吗？能拿到 last_login_date？</b></td><td>7天/2月未登录规则、工具1和工具2</td><td>退化为仅用"未下单天数"判断失活</td></tr>
+  <tr><td>2</td><td><b>BD 与客户归属关系在哪个系统/表？</b></td><td>所有接口的权限基础</td><td>无降级，必须有</td></tr>
+  <tr><td>3</td><td><b>客户等级数据在哪？实时还是离线标签？</b></td><td>筛选过滤 + 话术个性化</td><td>先按采购额粗分档</td></tr>
+  <tr><td>4</td><td><b>历史采购能按时间范围聚合吗？还是只有原始订单？</b></td><td>环比趋势计算</td><td>研发需先做聚合再封装</td></tr>
+  <tr><td>5</td><td><b>常购品类/商品有现成标签吗？</b></td><td>工具2的 top_categories / top_products</td><td>从订单明细实时统计（性能注意）</td></tr>
+  <tr><td>6</td><td><b>企微消息通道现在通不通？BD和客户是否已是好友？</b></td><td>工具4能否实现</td><td>MVP 降级：AI 生成话术 → 推给BD手动发</td></tr>
+  <tr><td>7</td><td><b>这些数据现在有 API 还是只有数据库/数仓？</b></td><td>研发工作量（有API包一层，没有要先写API）</td><td>—</td></tr>
+  <tr><td>8</td><td><b>BD 上次联系客户的记录在哪？CRM 有通话/拜访记录吗？</b></td><td>工具2的 last_contact_date</td><td>MVP 先不出这个字段</td></tr>
+</table>
+
+<!-- ===================== 排期建议 ===================== -->
+<hr>
+<h2>交付节奏建议</h2>
+<table>
+  <tr><th>阶段</th><th>内容</th><th>产出</th></tr>
+  <tr><td><b>本周</b></td><td>研发确认数据可用性，反馈各字段来源</td><td>接口可行性结论</td></tr>
+  <tr><td><b>下周</b></td><td>研发完成工具 1-3 的 MCP 封装；产品侧编写 Skill 1（失活风险扫描）+ Skill 2（话术生成）</td><td>MCP 接口可调用 + Skill 初稿</td></tr>
+  <tr><td><b>第三周</b></td><td>联调测试；企微通道评估（工具4/5）；BD 内测收集反馈</td><td>MVP 可试用</td></tr>
+</table>
+
+</body>
+</html>
